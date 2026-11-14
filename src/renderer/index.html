@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'">
+<title>Agents</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="widget" id="widget">
+  <header class="bar">
+    <div>
+      <h1><span class="led" aria-hidden="true"></span>agents</h1>
+      <p id="summary">waiting for sessions</p>
+    </div>
+    <div class="bar-actions">
+      <button id="pin" class="icon-btn" aria-label="Keep on top" aria-pressed="false">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M8 3h8l-1 6 3 4H6l3-4-1-6z"/></svg>
+      </button>
+      <button id="expand" class="icon-btn" aria-label="Expand to see activity" aria-pressed="false">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+      </button>
+    </div>
+  </header>
+  <main id="list" class="list" aria-live="polite"></main>
+  <footer class="foot">
+    <span id="sync">not connected yet</span>
+  </footer>
+</div>
+<script src="renderer.js"></script>
+</body>
+</html>

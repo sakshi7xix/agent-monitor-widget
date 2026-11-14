@@ -1,0 +1,21 @@
+{
+  "name": "agent-monitor-widget",
+  "version": "0.1.0",
+  "description": "Tray widget that shows what each Claude Code session is doing and lets you accept or deny its permission requests without switching windows.",
+  "main": "src/main.js",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "install-hooks": "node scripts/hooks.js install",
+    "uninstall-hooks": "node scripts/hooks.js uninstall",
+    "icons": "node scripts/make-icons.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "electron": "^45.3.2"
+  }
+}
