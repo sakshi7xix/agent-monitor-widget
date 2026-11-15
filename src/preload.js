@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('agentMonitor', {
   onState: (callback) => ipcRenderer.on('state', (_event, state) => callback(state)),
   decide: (pendingId, behavior, options) => ipcRenderer.invoke('decide', pendingId, behavior, options),
   setExpanded: (expanded) => ipcRenderer.invoke('set-expanded', expanded),
+  setHeight: (height) => ipcRenderer.invoke('set-height', height),
   setPinned: (pinned) => ipcRenderer.invoke('set-pinned', pinned),
   installHooks: () => ipcRenderer.invoke('install-hooks'),
 });

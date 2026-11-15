@@ -4,13 +4,19 @@
 
 const api = window.agentMonitor;
 const list = document.getElementById('list');
+const cards = document.createElement('div');
+cards.className = 'cards';
+list.appendChild(cards);
+const bar = document.querySelector('.bar');
+const foot = document.querySelector('.foot');
 const summary = document.getElementById('summary');
 const sync = document.getElementById('sync');
 const expandBtn = document.getElementById('expand');
 const pinBtn = document.getElementById('pin');
 
 let expanded = false;
-let pinned = false;
+let pinned = true;
+let lastHeight = 0;
 const drafts = new Map(); // pendingId -> unsent reply text
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -86,7 +92,9 @@ function pendingBlock(pending) {
   deny.addEventListener('click', () => api.decide(pending.id, 'deny', {}));
   actions.appendChild(deny);
   if (pending.canAlwaysAllow) {
-    const always = el('button', 'btn', 'Always allow');
+    const always = el('button', 'btn', 'Always');
+    always.setAttribute('aria-label', 'Always allow');
+    always.title = 'Always allow';
     always.addEventListener('click', () => api.decide(pending.id, 'allow', { always: true }));
     actions.appendChild(always);
   }
@@ -182,12 +190,30 @@ function render(state) {
   // keep focus and scroll position across redraws
   const focusedId = document.activeElement && document.activeElement.id;
   const scroll = list.scrollTop;
-  list.replaceChildren(...(sessions.length ? sessions.map(card) : [emptyState(state.hooksInstalled)]));
+  cards.replaceChildren(...(sessions.length ? sessions.map(card) : [emptyState(state.hooksInstalled)]));
   list.scrollTop = scroll;
   if (focusedId) {
     const again = document.getElementById(focusedId);
     if (again && again !== document.activeElement) again.focus();
   }
+
+  if (typeof state.pinned === 'boolean') {
+    pinned = state.pinned;
+    pinBtn.setAttribute('aria-pressed', String(pinned));
+  }
+  fitWindow();
+}
+
+// Ask the main process to make the window as tall as its content.
+function fitWindow() {
+  requestAnimationFrame(() => {
+    const pad = parseFloat(getComputedStyle(list).paddingTop) + parseFloat(getComputedStyle(list).paddingBottom);
+    const height = Math.ceil(bar.offsetHeight + cards.offsetHeight + pad + foot.offsetHeight + 2);
+    if (height !== lastHeight) {
+      lastHeight = height;
+      api.setHeight(height);
+    }
+  });
 }
 
 expandBtn.addEventListener('click', async () => {

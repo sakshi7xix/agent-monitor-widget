@@ -33,8 +33,25 @@ function readSettings(file) {
   return JSON.parse(text); // throw on invalid JSON rather than overwrite it
 }
 
+// SessionStart only accepts command hooks, so that one event is forwarded with curl.
+const COMMAND_EVENTS = new Set(['SessionStart']);
+
+function curlCommand(url, token) {
+  return (
+    `curl -s -m 3 -X POST -H "Content-Type: application/json" ` +
+    `-H "X-Agent-Monitor-Token: ${token}" --data-binary @- ${url} || exit 0`
+  );
+}
+
 function isOurs(group, url) {
-  return Array.isArray(group?.hooks) && group.hooks.some((h) => h?.type === 'http' && h.url === url);
+  return (
+    Array.isArray(group?.hooks) &&
+    group.hooks.some(
+      (h) =>
+        (h?.type === 'http' && h.url === url) ||
+        (h?.type === 'command' && typeof h.command === 'string' && h.command.includes(url) && h.command.includes('X-Agent-Monitor-Token'))
+    )
+  );
 }
 
 function strip(settings, url) {
@@ -67,9 +84,10 @@ function install() {
   settings.hooks = settings.hooks || {};
   for (const [event, timeout] of Object.entries(EVENTS)) {
     settings.hooks[event] = settings.hooks[event] || [];
-    settings.hooks[event].push({
-      hooks: [{ type: 'http', url, timeout, headers: { 'X-Agent-Monitor-Token': cfg.token } }],
-    });
+    const handler = COMMAND_EVENTS.has(event)
+      ? { type: 'command', command: curlCommand(url, cfg.token), timeout, async: true }
+      : { type: 'http', url, timeout, headers: { 'X-Agent-Monitor-Token': cfg.token } };
+    settings.hooks[event].push({ hooks: [handler] });
   }
   write(file, settings);
   return { file, events: Object.keys(EVENTS).length };

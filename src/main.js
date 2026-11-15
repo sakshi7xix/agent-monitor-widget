@@ -1,5 +1,5 @@
 'use strict';
-// Electron main process: tray icon, the widget window, and the local hook server.
+// Electron main process: tray icon, the floating widget window, and the local hook server.
 
 const path = require('node:path');
 const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen, Notification, dialog } = require('electron');
@@ -8,12 +8,17 @@ const { Store } = require('./store');
 const { createHookServer } = require('./server');
 const hooks = require('../scripts/hooks');
 
-const SIZE = { compact: { width: 380, height: 640 }, expanded: { width: 460, height: 780 } };
+const WIDTH = { compact: 320, expanded: 420 };
+const MIN_HEIGHT = 120;
+const MAX_HEIGHT = 720;
+const MARGIN = 8;
 
 let tray = null;
 let win = null;
-let pinned = false;
+let pinned = true; // float above other windows; unpinned = hide when you click away
 let expanded = false;
+let contentHeight = 160; // reported by the widget so the window fits its cards
+let userMoved = false; // once dragged, the window stays where the user put it
 let hookServer = null;
 const store = new Store();
 
@@ -22,7 +27,7 @@ function icon(name) {
 }
 
 function snapshot() {
-  return { sessions: store.snapshot(), hooksInstalled: hooks.isInstalled() };
+  return { sessions: store.snapshot(), hooksInstalled: hooks.isInstalled(), pinned };
 }
 
 function refresh() {
@@ -35,32 +40,52 @@ function refresh() {
   if (win && !win.isDestroyed()) win.webContents.send('state', snapshot());
 }
 
-function placeWindow() {
-  const { width, height } = expanded ? SIZE.expanded : SIZE.compact;
-  const trayBounds = tray.getBounds();
-  const hasTrayBounds = trayBounds.width > 0 && trayBounds.height > 0;
-  const display = hasTrayBounds
-    ? screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y })
-    : screen.getPrimaryDisplay();
-  const area = display.workArea;
-  const h = Math.min(height, area.height - 16);
-
-  let x = area.x + area.width - width - 8;
-  let y = area.y + area.height - h - 8;
-  if (hasTrayBounds) {
-    x = Math.round(trayBounds.x + trayBounds.width / 2 - width / 2);
-    // tray at the top of the screen (macOS, some Linux) opens downward, otherwise upward
-    y = trayBounds.y < area.y + area.height / 2 ? trayBounds.y + trayBounds.height + 6 : trayBounds.y - h - 6;
-  }
-  x = Math.max(area.x + 8, Math.min(x, area.x + area.width - width - 8));
-  y = Math.max(area.y + 8, Math.min(y, area.y + area.height - h - 8));
-  win.setBounds({ x, y, width, height: h });
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(value, max));
 }
 
-function showWindow() {
+// Size the window to its content and keep it on screen.
+function placeWindow() {
+  const width = expanded ? WIDTH.expanded : WIDTH.compact;
+  const current = win.getBounds();
+  const trayBounds = tray.getBounds();
+  const hasTrayBounds = trayBounds.width > 0 && trayBounds.height > 0;
+
+  const display = userMoved
+    ? screen.getDisplayMatching(current)
+    : hasTrayBounds
+      ? screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y })
+      : screen.getPrimaryDisplay();
+  const area = display.workArea;
+  const height = clamp(contentHeight, MIN_HEIGHT, Math.min(MAX_HEIGHT, area.height - MARGIN * 2));
+
+  let x;
+  let y;
+  if (userMoved) {
+    // keep the top-right corner where the user left it
+    x = current.x + current.width - width;
+    y = current.y;
+  } else if (hasTrayBounds) {
+    x = Math.round(trayBounds.x + trayBounds.width / 2 - width / 2);
+    // tray at the top of the screen (macOS, some Linux) opens downward, otherwise upward
+    y = trayBounds.y < area.y + area.height / 2 ? trayBounds.y + trayBounds.height + 6 : trayBounds.y - height - 6;
+  } else {
+    x = area.x + area.width - width - MARGIN;
+    y = area.y + area.height - height - MARGIN;
+  }
+  x = clamp(x, area.x + MARGIN, area.x + area.width - width - MARGIN);
+  y = clamp(y, area.y + MARGIN, area.y + area.height - height - MARGIN);
+  win.setBounds({ x, y, width, height });
+}
+
+function showWindow({ focus = true } = {}) {
   placeWindow();
-  win.show();
-  win.focus();
+  if (focus) {
+    win.show();
+    win.focus();
+  } else {
+    win.showInactive();
+  }
 }
 
 function toggleWindow() {
@@ -70,7 +95,8 @@ function toggleWindow() {
 
 function createWindow() {
   win = new BrowserWindow({
-    ...SIZE.compact,
+    width: WIDTH.compact,
+    height: contentHeight,
     show: false,
     frame: false,
     resizable: false,
@@ -85,7 +111,14 @@ function createWindow() {
       sandbox: true,
     },
   });
+  // Float above every window, on every desktop/Space, including full-screen apps.
+  win.setAlwaysOnTop(true, 'floating');
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.on('will-move', () => {
+    userMoved = true;
+  });
   win.on('blur', () => {
     if (!pinned) win.hide();
   });
@@ -127,11 +160,10 @@ function createTray() {
     Menu.buildFromTemplate([
       { label: 'Show / hide widget', click: toggleWindow },
       {
-        label: 'Keep on top when unfocused',
-        type: 'checkbox',
-        checked: pinned,
-        click: (item) => {
-          pinned = item.checked;
+        label: 'Move back under the tray icon',
+        click: () => {
+          userMoved = false;
+          showWindow();
         },
       },
       { type: 'separator' },
@@ -146,7 +178,7 @@ function createTray() {
 function notifyPending(pending) {
   if (win.isVisible() || !Notification.isSupported()) return;
   const note = new Notification({ title: 'An agent needs you', body: pending.summary, silent: false });
-  note.on('click', showWindow);
+  note.on('click', () => showWindow());
   note.show();
 }
 
@@ -185,6 +217,12 @@ if (!app.requestSingleInstanceLock()) {
       expanded = Boolean(value);
       placeWindow();
     });
+    ipcMain.handle('set-height', (_event, value) => {
+      const next = Math.round(Number(value));
+      if (!Number.isFinite(next) || next === contentHeight) return;
+      contentHeight = next;
+      placeWindow();
+    });
     ipcMain.handle('set-pinned', (_event, value) => {
       pinned = Boolean(value);
       return pinned;
@@ -193,6 +231,8 @@ if (!app.requestSingleInstanceLock()) {
       installHooksFromMenu();
       return hooks.isInstalled();
     });
+
+    win.webContents.once('did-finish-load', () => showWindow({ focus: false }));
 
     // keep "12m" style timers and finished-session cleanup moving
     setInterval(refresh, 30 * 1000);
