@@ -64,6 +64,16 @@ If the app is not running, the hook requests fail to connect. Claude Code treats
 
 If a request disappears from the widget without you clicking anything, it was answered somewhere else (for example in the terminal) or the session ended.
 
+## Troubleshooting
+
+If the widget is empty or a session is missing, run:
+
+```bash
+npm run doctor
+```
+
+It checks that the widget app is running, that the hooks are in Claude Code's settings, and that `curl` is available, then sends a test session. A card named `doctor-test` should appear in the widget. Each failed check prints its fix.
+
 ## When sessions leave the list
 
 | Session state                                   | Removed after        |
@@ -100,7 +110,7 @@ After changing either value, run `npm run install-hooks` again so the hooks matc
 - **Claude Code only.** Chats in the Claude apps have no way for an outside program to watch them or answer their prompts, so they do not appear here.
 - **Sessions opened before the hooks were added need a restart.** New sessions appear as soon as they start.
 - **Permission requests wait up to 10 minutes** (the hook timeout). After that Claude Code stops waiting for the widget.
-- **Tested on Linux only so far**, under a virtual display: the hook server, the approval round trip and the widget rendering. On macOS the app has been seen starting and opening from the menu bar; floating above full-screen apps, and everything on Windows, has not been tested yet.
+- **Tested on Linux**, under a virtual display, including a real Claude Code session (2.1.325) whose file-write request was approved through the widget's server. On macOS the app has been seen starting and opening from the menu bar; floating above full-screen apps, and everything on Windows, has not been tested yet.
 - The saved list in `~/.agent-monitor/state.json` holds project folder names, recent actions and the start of your prompts, readable only by your user account.
 
 ## Removing it

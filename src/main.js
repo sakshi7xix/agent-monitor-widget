@@ -129,6 +129,8 @@ function createWindow() {
   win.setAlwaysOnTop(true, 'floating');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
 
+  // Registered before loading so the first show can never be missed.
+  win.once('ready-to-show', () => showWindow({ focus: false }));
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.on('will-move', () => {
     userMoved = true;
@@ -246,8 +248,6 @@ if (!app.requestSingleInstanceLock()) {
       installHooksFromMenu();
       return hooks.isInstalled();
     });
-
-    win.webContents.once('did-finish-load', () => showWindow({ focus: false }));
 
     // keep "12m" style timers and finished-session cleanup moving
     setInterval(refresh, 30 * 1000);

@@ -10,7 +10,8 @@
     "test": "node --test",
     "install-hooks": "node scripts/hooks.js install",
     "uninstall-hooks": "node scripts/hooks.js uninstall",
-    "icons": "node scripts/make-icons.js"
+    "icons": "node scripts/make-icons.js",
+    "doctor": "node scripts/doctor.js"
   },
   "engines": {
     "node": ">=20"
