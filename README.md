@@ -16,6 +16,8 @@ A small tray app that shows what each of your Claude Code sessions is doing, and
 - **Expanded view.** Shows a short activity log per session, a preview of the proposed edit, and a box to deny with a message telling Claude what to do instead.
 - **Floats above your windows.** The widget stays on top of other windows, on every desktop/Space. Drag it by its header to move it. Turn off the pin button to make it hide when you click away instead.
 - **Sizes itself.** It is small when empty and grows as sessions are added, up to 720px tall, then scrolls.
+- **Remembers sessions.** The list is saved, so quitting and reopening the widget brings your open sessions back.
+- **Cleans up after itself.** Sessions you stopped using drop off the list on their own (see [When sessions leave the list](#when-sessions-leave-the-list)).
 - **Tray icon.** Green when nothing is waiting, amber when a session needs you. A desktop notification appears when a request arrives while the widget is hidden.
 - **Dark and light.** Follows your system theme.
 - **Pixel avatars.** Each session gets its own colour. The avatar hops while the session waits on you and bobs while it works.
@@ -62,6 +64,19 @@ If the app is not running, the hook requests fail to connect. Claude Code treats
 
 If a request disappears from the widget without you clicking anything, it was answered somewhere else (for example in the terminal) or the session ended.
 
+## When sessions leave the list
+
+| Session state                                   | Removed after        |
+| ----------------------------------------------- | -------------------- |
+| Ended (you closed it)                           | 10 minutes           |
+| Idle (open, but nothing happening)              | 30 minutes           |
+| Running, but silent (most likely killed)        | 2 hours              |
+| Waiting on you                                  | Never, until answered |
+
+A removed session is not gone for good: it reappears the moment it does anything again.
+
+The list is saved to `~/.agent-monitor/state.json` and reloaded when the widget starts. Sessions that were mid-task show as idle until they next report. Requests that were waiting when the widget quit are not restored; Claude Code asks for those in the terminal instead.
+
 ## Configuration
 
 Settings live in `~/.agent-monitor/config.json`, created on first run:
@@ -86,7 +101,7 @@ After changing either value, run `npm run install-hooks` again so the hooks matc
 - **Sessions opened before the hooks were added need a restart.** New sessions appear as soon as they start.
 - **Permission requests wait up to 10 minutes** (the hook timeout). After that Claude Code stops waiting for the widget.
 - **Tested on Linux only so far**, under a virtual display: the hook server, the approval round trip and the widget rendering. On macOS the app has been seen starting and opening from the menu bar; floating above full-screen apps, and everything on Windows, has not been tested yet.
-- State is kept in memory. Quitting the app clears the list; ended sessions drop off after 10 minutes.
+- The saved list in `~/.agent-monitor/state.json` holds project folder names, recent actions and the start of your prompts, readable only by your user account.
 
 ## Removing it
 

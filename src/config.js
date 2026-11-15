@@ -44,4 +44,4 @@ function hookUrl(cfg) {
   return `http://127.0.0.1:${cfg.port}/hook`;
 }
 
-module.exports = { loadConfig, configPath, hookUrl, DEFAULT_PORT };
+module.exports = { loadConfig, configDir, configPath, hookUrl, DEFAULT_PORT };

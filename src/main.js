@@ -4,6 +4,7 @@
 const path = require('node:path');
 const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen, Notification, dialog } = require('electron');
 const { loadConfig } = require('./config');
+const { loadState, saveState } = require('./persist');
 const { Store } = require('./store');
 const { createHookServer } = require('./server');
 const hooks = require('../scripts/hooks');
@@ -21,6 +22,19 @@ let contentHeight = 160; // reported by the widget so the window fits its cards
 let userMoved = false; // once dragged, the window stays where the user put it
 let hookServer = null;
 const store = new Store();
+let saveTimer = null;
+
+function saveNow() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  saveState(store.serialize());
+}
+
+// Called whenever a session changes: redraw, and save shortly after.
+function changed() {
+  refresh();
+  if (!saveTimer) saveTimer = setTimeout(saveNow, 1000);
+}
 
 function icon(name) {
   return nativeImage.createFromPath(path.join(__dirname, '..', 'assets', name)).resize({ width: 18, height: 18 });
@@ -194,7 +208,8 @@ if (!app.requestSingleInstanceLock()) {
     createWindow();
     createTray();
 
-    hookServer = createHookServer({ store, token: cfg.token, onChange: refresh, onPending: notifyPending });
+    store.restore(loadState());
+    hookServer = createHookServer({ store, token: cfg.token, onChange: changed, onPending: notifyPending });
     try {
       await hookServer.listen(cfg.port);
     } catch (err) {
@@ -244,6 +259,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('before-quit', () => {
+    saveNow();
     if (hookServer) hookServer.close();
   });
 }

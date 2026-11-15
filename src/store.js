@@ -5,7 +5,9 @@
 const path = require('node:path');
 
 const MAX_LOG = 40;
-const DONE_TTL_MS = 10 * 60 * 1000;
+const DONE_TTL_MS = 10 * 60 * 1000; // ended sessions
+const IDLE_TTL_MS = 30 * 60 * 1000; // open but unused sessions
+const RUNNING_TTL_MS = 2 * 60 * 60 * 1000; // "running" with no events: most likely killed
 const PALETTE = ['#FF4D8D', '#3D9BFF', '#B6F23C', '#FF9A1F', '#2EE6D6', '#FFE14D'];
 const STATUS_ORDER = { needs: 0, running: 1, idle: 2, done: 3 };
 
@@ -195,10 +197,68 @@ class Store {
   }
 
   prune() {
-    const cutoff = this.now() - DONE_TTL_MS;
+    const now = this.now();
     for (const [id, s] of this.sessions) {
-      if (s.status === 'done' && (s.endedAt || 0) < cutoff) this.sessions.delete(id);
+      if (s.pending.length > 0) continue; // never drop a session that is waiting on the user
+      const quiet = now - s.lastActivity;
+      if (
+        (s.status === 'done' && now - (s.endedAt || 0) > DONE_TTL_MS) ||
+        (s.status === 'idle' && quiet > IDLE_TTL_MS) ||
+        (s.status === 'running' && quiet > RUNNING_TTL_MS)
+      ) {
+        this.sessions.delete(id); // it comes back by itself if it does anything again
+      }
     }
+  }
+
+  // Plain data for saving to disk. Pending requests are left out: their
+  // connections to Claude Code do not survive a restart of the widget.
+  serialize() {
+    this.prune();
+    return {
+      version: 1,
+      sessions: [...this.sessions.values()].map((s) => ({
+        id: s.id,
+        title: s.title,
+        cwd: s.cwd,
+        model: s.model,
+        status: s.status,
+        startedAt: s.startedAt,
+        lastActivity: s.lastActivity,
+        endedAt: s.endedAt,
+        lastMessage: s.lastMessage,
+        log: s.log,
+      })),
+    };
+  }
+
+  // Load saved sessions. Anything that was mid-task is shown as idle until it reports again.
+  restore(data) {
+    if (!data || data.version !== 1 || !Array.isArray(data.sessions)) return 0;
+    const num = (v, fallback) => (Number.isFinite(v) ? v : fallback);
+    for (const raw of data.sessions) {
+      if (!raw || typeof raw.id !== 'string' || !raw.id || this.sessions.has(raw.id)) continue;
+      const now = this.now();
+      this.sessions.set(raw.id, {
+        id: raw.id,
+        title: clip(raw.title, 60),
+        cwd: clip(raw.cwd, 400),
+        model: clip(raw.model, 40),
+        color: colorFor(raw.id),
+        status: raw.status === 'done' ? 'done' : 'idle',
+        startedAt: num(raw.startedAt, now),
+        lastActivity: num(raw.lastActivity, now),
+        endedAt: num(raw.endedAt, undefined),
+        lastMessage: clip(raw.lastMessage, 400),
+        log: (Array.isArray(raw.log) ? raw.log : [])
+          .filter((e) => e && Number.isFinite(e.t))
+          .slice(-MAX_LOG)
+          .map((e) => ({ t: e.t, text: clip(e.text, 200) })),
+        pending: [],
+      });
+    }
+    this.prune();
+    return this.sessions.size;
   }
 
   snapshot() {
